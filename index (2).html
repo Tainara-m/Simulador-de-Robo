@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2311202B'/%3E%3Crect x='7' y='9' width='18' height='15' rx='4' fill='%23E39B00'/%3E%3Ccircle cx='12.5' cy='15' r='2' fill='%2311202B'/%3E%3Ccircle cx='19.5' cy='15' r='2' fill='%2311202B'/%3E%3Cpath d='M16 9V5' stroke='%23E39B00' stroke-width='2'/%3E%3C/svg%3E">
+<title>Simulador de Robô</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: cabeçalho simples, abas por assunto, uma seção por vez. O simulador usa duas colunas (quadro + painel) que empilham no celular. */
+*{box-sizing:border-box}
+:root{
+  --bg:#E9EFF2; --surface:#F6F9FA; --ink:#11202B; --muted:#4A6070; --line:#C3D1D9;
+  --accent:#0A6C8F; --accent-ink:#FFFFFF; --accent-soft:#CFE6EF; --signal:#E39B00;
+  --ok:#1B8651; --ok-soft:#CDEBDA; --bad:#C0392F; --bad-soft:#F4D6D2; --wall:#6C7F8C;
+  --display:'Chakra Petch',system-ui,sans-serif;
+  --body:'IBM Plex Sans',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D151B; --surface:#152029; --ink:#E4EDF2; --muted:#98ACB9; --line:#2B3B47;
+    --accent:#4CC3E8; --accent-ink:#06222D; --accent-soft:#16384A; --signal:#F2B72E;
+    --ok:#4CC987; --ok-soft:#133726; --bad:#F0746B; --bad-soft:#44201D; --wall:#5C7080;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D151B; --surface:#152029; --ink:#E4EDF2; --muted:#98ACB9; --line:#2B3B47;
+  --accent:#4CC3E8; --accent-ink:#06222D; --accent-soft:#16384A; --signal:#F2B72E;
+  --ok:#4CC987; --ok-soft:#133726; --bad:#F0746B; --bad-soft:#44201D; --wall:#5C7080;
+  color-scheme:dark;
+}
+body{
+  background:var(--bg); color:var(--ink);
+  font:400 16px/1.55 var(--body);
+  padding-block:0 56px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.wrap{max-width:1040px;margin:0 auto}
+header.top{padding-block:28px 18px}
+.eyebrow{font:500 13px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+.eyebrow b{color:var(--accent);font-weight:500}
+h1{font:700 clamp(30px,6vw,48px)/1.05 var(--display);margin:10px 0 0;letter-spacing:.01em;text-wrap:balance}
+h2{font:600 clamp(22px,3.4vw,29px)/1.2 var(--display);margin:0 0 8px;text-wrap:balance}
+h3{font:600 17px/1.3 var(--display);margin:0 0 6px}
+p{margin:0 0 12px}
+.lead{max-width:66ch;color:var(--muted);margin-bottom:22px}
+nav.tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:28px;scrollbar-width:thin}
+nav.tabs button{
+  flex:0 0 auto;font:600 15px var(--body);color:var(--muted);background:none;border:0;
+  padding:12px 14px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px;min-height:44px
+}
+nav.tabs button:hover{color:var(--ink)}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--signal)}
+:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+.btn{
+  font:600 15px var(--body);padding:9px 16px;border-radius:6px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink);cursor:pointer;min-height:44px
+}
+.btn:hover:not(:disabled){border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.small{min-height:36px;padding:6px 12px;font-size:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+.chip{
+  font:500 14px var(--body);padding:8px 14px;border-radius:999px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink);cursor:pointer;min-height:40px
+}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+/* ciclo */
+.stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:32px;margin:20px 0 16px}
+.stage{position:relative;transition:background .25s,border-color .25s}
+.stage:not(:last-child)::after{
+  content:"→";position:absolute;right:-26px;top:50%;transform:translateY(-50%);
+  font:600 22px var(--mono);color:var(--muted)
+}
+.stage .tag{font:500 12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+.stage ul{margin:0;padding-left:18px}
+.stage.active{border-color:var(--accent);background:var(--accent-soft)}
+.story{min-height:3.2em;border-left:4px solid var(--signal);padding:6px 0 6px 14px;margin:0 0 16px;max-width:70ch}
+.loopnote{font:500 13px var(--mono);color:var(--muted)}
+
+/* componentes e quiz */
+.card-q{font:600 clamp(20px,3vw,26px)/1.25 var(--display);margin:6px 0 16px;text-wrap:balance}
+.buckets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.opt{
+  text-align:left;font:inherit;padding:12px 14px;border-radius:6px;border:1px solid var(--line);
+  background:var(--bg);color:var(--ink);cursor:pointer;min-height:64px;display:block;width:100%
+}
+.opt strong{display:block;font:600 16px var(--display)}
+.opt span{font-size:14px;color:var(--muted)}
+.opt:hover:not(:disabled){border-color:var(--accent)}
+.opt.right{background:var(--ok-soft);border-color:var(--ok)}
+.opt.wrong{background:var(--bad-soft);border-color:var(--bad)}
+.opt:disabled{cursor:default}
+.fb{min-height:3em;margin:16px 0 12px}
+.progress{font:500 13px var(--mono);color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.quizopts{display:grid;gap:10px}
+
+/* simulador */
+.modes{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.sim{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;align-items:start}
+.board{min-width:0}
+canvas{display:block;border:1px solid var(--line);border-radius:6px;background:var(--surface);max-width:100%}
+.readout{font:500 14px var(--mono);margin-top:8px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
+.readout b{color:var(--ink);font-weight:500}
+.palette{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:14px}
+.prog{list-style:none;margin:0 0 12px;padding:8px;border:1px dashed var(--line);border-radius:6px;min-height:88px;max-height:300px;overflow:auto;background:var(--bg)}
+.prog li{display:flex;align-items:center;gap:8px;padding:5px 6px;font:500 14px var(--mono);border-radius:4px}
+.prog li:nth-child(odd){background:color-mix(in srgb,var(--line) 35%,transparent)}
+.prog .x{margin-left:auto;background:none;border:0;color:var(--muted);cursor:pointer;font-size:16px;min-width:32px;min-height:32px}
+.prog .x:hover{color:var(--bad)}
+.prog select{font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:2px 4px}
+.empty{color:var(--muted);font:400 14px var(--body);padding:10px}
+.msg{min-height:3.4em;margin:6px 0 12px;padding:10px 12px;border-radius:6px;background:var(--bg);border:1px solid var(--line)}
+.msg.ok{background:var(--ok-soft);border-color:var(--ok)}
+.msg.bad{background:var(--bad-soft);border-color:var(--bad)}
+.levels{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.code{font:500 14px/1.6 var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow-x:auto;white-space:pre;margin:0 0 12px}
+.results{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0}
+.pill{font:500 13px var(--mono);padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg)}
+.pill b{font-weight:500;color:var(--accent)}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font:500 13px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.field select,.field input[type=range]{font:inherit;width:100%}
+.field select{padding:9px 10px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-height:44px}
+
+/* roteiro */
+.plan{display:grid;gap:12px;margin:0 0 24px;padding:0;list-style:none}
+.plan li{display:grid;grid-template-columns:78px minmax(0,1fr);gap:14px;align-items:start}
+.plan .min{font:600 20px var(--display);color:var(--accent)}
+.cols2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+
+@media (max-width:820px){
+  .stages{grid-template-columns:1fr;gap:30px}
+  .stage:not(:last-child)::after{content:"↓";right:auto;left:50%;top:auto;bottom:-28px;transform:translateX(-50%)}
+  .buckets{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sim{grid-template-columns:1fr}
+  .cols2{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<style>body{margin:0}</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow"><b>Sentir</b><span>·</span><b>Pensar</b><span>·</span><b>Agir</b></div>
+    <h1>Simulador de Robô</h1>
+  </header>
+
+  <!-- SIMULADOR -->
+  <section id="p-simulador">
+    <p class="lead">No primeiro modo você escreve o programa. No segundo, o robô decide sozinho com base no sensor de distância.</p>
+    <div class="modes" role="group" aria-label="Modo do simulador">
+      <button class="chip" id="mode-prog" data-mode="prog" aria-pressed="true">Programar o robô</button>
+      <button class="chip" id="mode-auto" data-mode="auto" aria-pressed="false">Rota autônoma</button>
+    </div>
+
+    <div id="m-prog" class="sim">
+      <div class="board">
+        <canvas id="cv-prog" aria-label="Quadro do desafio com o robô e a bandeira"></canvas>
+        <div class="readout"><span>Sensor frontal: <b id="ro-dist">—</b></span><span>Blocos: <b id="ro-count">0</b><b id="ro-limit"></b></span></div>
+      </div>
+      <div class="box">
+        <div class="levels" id="levels" role="group" aria-label="Nível"></div>
+        <p id="lvl-info" class="muted" style="margin-bottom:12px"></p>
+        <div class="palette">
+          <button class="btn small" id="b-F">↑ Avançar</button>
+          <button class="btn small" id="b-REP">⟳ Repetir</button>
+          <button class="btn small" id="b-L">↶ Girar à esquerda</button>
+          <button class="btn small" id="b-END">■ Fim do repetir</button>
+          <button class="btn small" id="b-R">↷ Girar à direita</button>
+        </div>
+        <ol class="prog" id="prog" aria-label="Seu programa"></ol>
+        <div class="row" style="margin-bottom:10px">
+          <button class="btn primary" id="p-run">Executar</button>
+          <button class="btn" id="p-reset">Reiniciar robô</button>
+          <button class="btn" id="p-clear">Limpar programa</button>
+        </div>
+        <div class="msg" id="p-msg" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <div id="m-auto" class="sim" hidden>
+      <div class="board">
+        <canvas id="cv-auto" aria-label="Sala com obstáculos e o robô aspirador"></canvas>
+        <div class="readout">
+          <span>Passos: <b id="a-steps">0</b>/200</span>
+          <span>Cobertura: <b id="a-cov">0%</b></span>
+          <span>Giros: <b id="a-turns">0</b></span>
+          <span>Sensor: <b id="a-dist">—</b></span>
+        </div>
+      </div>
+      <div class="box">
+        <div class="field">
+          <label for="a-strat">Estratégia ao encontrar obstáculo</label>
+          <select id="a-strat">
+            <option value="dir">Sempre girar à direita</option>
+            <option value="esq">Sempre girar à esquerda</option>
+            <option value="rnd">Sortear o lado</option>
+          </select>
+        </div>
+        <pre class="code" id="a-code"></pre>
+        <div class="field">
+          <label for="a-speed">Velocidade</label>
+          <input type="range" id="a-speed" min="1" max="5" value="3">
+        </div>
+        <div class="row">
+          <button class="btn primary" id="a-run">Executar</button>
+          <button class="btn" id="a-new">Nova sala</button>
+        </div>
+        <div class="results" id="a-results" aria-live="polite"></div>
+        <p class="muted" style="margin:12px 0 0;font-size:14px">Cada sala tem 200 passos. Teste as três estratégias na mesma sala e compare a cobertura.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const DIRS=[[0,-1],[1,0],[0,1],[-1,0]];
+
+/* ---------- canvas ---------- */
+function fit(cv,cols,rows){
+  const par=cv.parentElement;
+  const w=Math.max(220,Math.min(par.clientWidth||320,cols*74));
+  const h=Math.round(w*rows/cols), dpr=window.devicePixelRatio||1;
+  cv.style.width=w+'px';cv.style.height=h+'px';
+  cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);
+  const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,cs:w/cols,w,h};
+}
+function rr(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  if(ctx.roundRect){ctx.roundRect(x,y,w,h,r);}else{ctx.rect(x,y,w,h);}
+}
+function drawGrid(ctx,cs,cols,rows,isWall){
+  ctx.fillStyle=css('--surface');ctx.fillRect(0,0,cs*cols,cs*rows);
+  ctx.strokeStyle=css('--line');ctx.lineWidth=1;
+  for(let x=0;x<=cols;x++){ctx.beginPath();ctx.moveTo(x*cs+.5,0);ctx.lineTo(x*cs+.5,rows*cs);ctx.stroke();}
+  for(let y=0;y<=rows;y++){ctx.beginPath();ctx.moveTo(0,y*cs+.5);ctx.lineTo(cols*cs,y*cs+.5);ctx.stroke();}
+  ctx.fillStyle=css('--wall');
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++)if(isWall(x,y)){rr(ctx,x*cs+3,y*cs+3,cs-6,cs-6,cs*.1);ctx.fill();}
+}
+function drawFlag(ctx,cs,gx,gy){
+  ctx.strokeStyle=css('--ink');ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo((gx+.36)*cs,(gy+.18)*cs);ctx.lineTo((gx+.36)*cs,(gy+.82)*cs);ctx.stroke();
+  ctx.fillStyle=css('--ok');ctx.beginPath();
+  ctx.moveTo((gx+.36)*cs,(gy+.18)*cs);ctx.lineTo((gx+.8)*cs,(gy+.36)*cs);ctx.lineTo((gx+.36)*cs,(gy+.54)*cs);ctx.closePath();ctx.fill();
+}
+function drawRobot(ctx,cs,x,y,a){
+  ctx.save();
+  ctx.translate((x+.5)*cs,(y+.5)*cs);ctx.rotate(a*Math.PI/180);
+  const s=cs*.62;
+  ctx.fillStyle=css('--ink');
+  rr(ctx,-s/2-cs*.06,-s*.42,cs*.1,s*.84,cs*.03);ctx.fill();
+  rr(ctx,s/2-cs*.04,-s*.42,cs*.1,s*.84,cs*.03);ctx.fill();
+  ctx.fillStyle=css('--signal');ctx.strokeStyle=css('--ink');ctx.lineWidth=2;
+  rr(ctx,-s/2,-s/2,s,s,s*.2);ctx.fill();ctx.stroke();
+  ctx.fillStyle=css('--ink');
+  ctx.beginPath();ctx.arc(-s*.2,-s*.34,cs*.045,0,7);ctx.fill();
+  ctx.beginPath();ctx.arc(s*.2,-s*.34,cs*.045,0,7);ctx.fill();
+  ctx.beginPath();ctx.moveTo(0,-s*.16);ctx.lineTo(s*.2,s*.14);ctx.lineTo(-s*.2,s*.14);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+function drawBeam(ctx,cs,x,y,d,n){
+  const [dx,dy]=DIRS[d];
+  const cx=(x+.5)*cs,cy=(y+.5)*cs,len=(n+.5)*cs;
+  ctx.save();ctx.strokeStyle=css('--accent');ctx.lineWidth=2;ctx.setLineDash([5,5]);
+  ctx.beginPath();ctx.moveTo(cx+dx*cs*.36,cy+dy*cs*.36);ctx.lineTo(cx+dx*len,cy+dy*len);ctx.stroke();
+  ctx.restore();
+}
+const dirOf=a=>((Math.round(a/90)%4)+4)%4;
+
+/* ---------- modo programar ---------- */
+const LEVELS=[
+ {nome:'Nível 1',tit:'Primeiros passos',w:6,h:6,start:{x:0,y:5,d:1},goal:{x:5,y:5},walls:[],limit:null,
+  info:'Faça o robô chegar à bandeira. O exemplo já tem 3 passos à frente. Complete o programa.',pre:['F','F','F']},
+ {nome:'Nível 2',tit:'Desvio',w:6,h:6,start:{x:0,y:5,d:0},goal:{x:5,y:0},walls:[[0,2]],limit:null,
+  info:'Há um obstáculo no caminho. Combine avançar e girar para contorná-lo.',pre:[]},
+ {nome:'Nível 3',tit:'Escada',w:6,h:6,start:{x:0,y:5,d:1},goal:{x:5,y:0},
+  walls:[[2,5],[3,5],[4,5],[5,5],[5,4],[5,3],[4,4],[4,3],[0,2],[0,1],[0,0],[1,1]],limit:8,
+  info:'Use no máximo 8 blocos. Procure um padrão que se repete e use o bloco Repetir.',pre:[]},
+ {nome:'Nível 4',tit:'Volta no bloco',w:6,h:6,start:{x:0,y:5,d:0},goal:{x:5,y:5},
+  walls:[[1,2],[2,2],[3,2],[4,2],[1,3],[2,3],[3,3],[4,3],[1,4],[2,4],[3,4],[4,4],[1,5],[2,5],[3,5],[4,5]],limit:12,
+  info:'Um bloco enorme fecha o caminho direto. Contorne por cima usando três trechos retos. Máximo de 12 blocos.',pre:[]},
+ {nome:'Nível 5',tit:'Labirinto',w:7,h:7,start:{x:0,y:6,d:1},goal:{x:6,y:0},
+  walls:[[0,5],[1,5],[2,5],[3,5],[4,5],[5,5],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[0,1],[1,1],[2,1],[3,1],[4,1],[5,1]],limit:22,
+  info:'O corredor faz um zigue-zague com três trechos longos. Máximo de 22 blocos, então use Repetir nos trechos longos.',pre:[]},
+ {nome:'Nível 6',tit:'Slalom',w:7,h:7,start:{x:0,y:6,d:1},goal:{x:6,y:6},
+  walls:[[1,6],[3,6],[5,6]],limit:10,
+  info:'Três obstáculos em fila. O desvio de cada um é igual, então repita o mesmo desvio. Máximo de 10 blocos.',pre:[]},
+ {nome:'Nível 7',tit:'Perímetro',w:7,h:7,start:{x:0,y:6,d:0},goal:{x:6,y:6},
+  walls:[[1,1],[2,1],[3,1],[4,1],[5,1],[1,2],[2,2],[3,2],[4,2],[5,2],[1,3],[2,3],[3,3],[4,3],[5,3],[1,4],[2,4],[3,4],[4,4],[5,4],[1,5],[2,5],[3,5],[4,5],[5,5],[1,6],[2,6],[3,6],[4,6],[5,6]],limit:6,
+  info:'Só o contorno está livre. Cada lado tem o mesmo tamanho. Máximo de 6 blocos: coloque um Repetir dentro de outro Repetir.',pre:[]}
+];
+const P={lv:0,prog:[],r:{x:0,y:0,a:0},running:false,tok:0,lay:null};
+const wallSet=lv=>new Set(lv.walls.map(w=>w[0]+','+w[1]));
+function pWall(x,y){const lv=LEVELS[P.lv];return x<0||y<0||x>=lv.w||y>=lv.h||wallSet(lv).has(x+','+y);}
+function freeAhead(x,y,d,wallFn){let n=0,[dx,dy]=DIRS[d],cx=x+dx,cy=y+dy;while(!wallFn(cx,cy)){n++;cx+=dx;cy+=dy;}return n;}
+function pLoad(i){
+  P.tok++;P.running=false;P.lv=i;
+  const lv=LEVELS[i];
+  P.prog=lv.pre.map(t=>({t,n:2}));
+  pResetRobot();
+  $('#lvl-info').textContent=lv.tit+'. '+lv.info;
+  $('#levels').innerHTML=LEVELS.map((l,k)=>`<button class="chip" id="lv-${k}" data-k="${k}" aria-pressed="${k===i}">${l.nome}</button>`).join('');
+  document.querySelectorAll('#levels .chip').forEach(b=>b.addEventListener('click',()=>pLoad(+b.dataset.k)));
+  pMsg(i===0?'Exemplo carregado. Pressione Executar para ver o robô andar.':'Monte o programa com os blocos e pressione Executar.');
+  pRenderProg();layoutProg();
+}
+function pResetRobot(){const s=LEVELS[P.lv].start;P.r={x:s.x,y:s.y,a:s.d*90};}
+function pMsg(t,k){const m=$('#p-msg');m.textContent=t;m.className='msg'+(k?' '+k:'');}
+function pRenderProg(){
+  const lv=LEVELS[P.lv];let depth=0;
+  const names={F:'↑ Avançar',L:'↶ Girar à esquerda',R:'↷ Girar à direita',END:'■ Fim do repetir'};
+  const html=P.prog.map((b,i)=>{
+    if(b.t==='END')depth=Math.max(0,depth-1);
+    const pad=depth*18;
+    const label=b.t==='REP'?`⟳ Repetir <select id="rep-${i}" data-i="${i}" aria-label="Número de repetições">${[2,3,4,5,6].map(n=>`<option value="${n}"${n===b.n?' selected':''}>${n}</option>`).join('')}</select> vezes`:names[b.t];
+    const li=`<li style="padding-left:${6+pad}px"><span>${label}</span><button class="x" data-i="${i}" aria-label="Remover bloco ${i+1}">✕</button></li>`;
+    if(b.t==='REP')depth++;
+    return li;
+  }).join('');
+  $('#prog').innerHTML=html||'<li class="empty">Nenhum bloco ainda. Toque nos blocos acima para adicionar.</li>';
+  $('#prog').querySelectorAll('.x').forEach(x=>x.addEventListener('click',()=>{if(P.running)return;P.prog.splice(+x.dataset.i,1);pRenderProg();}));
+  $('#prog').querySelectorAll('select').forEach(s=>s.addEventListener('change',()=>{P.prog[+s.dataset.i].n=+s.value;}));
+  $('#ro-count').textContent=P.prog.length;
+  $('#ro-limit').textContent=lv.limit?' / '+lv.limit:'';
+}
+function pAdd(t){
+  if(P.running)return;
+  const lv=LEVELS[P.lv];
+  if(lv.limit&&P.prog.length>=lv.limit){pMsg('Limite de '+lv.limit+' blocos neste nível. Remova um bloco ou use Repetir.','bad');return;}
+  P.prog.push({t,n:2});pRenderProg();
+  const l=$('#prog');l.scrollTop=l.scrollHeight;
+}
+['F','L','R','REP','END'].forEach(t=>$('#b-'+t).addEventListener('click',()=>pAdd(t)));
+$('#p-clear').addEventListener('click',()=>{if(P.running)return;P.prog=[];pRenderProg();pMsg('Programa limpo.');});
+$('#p-reset').addEventListener('click',()=>{P.tok++;P.running=false;pResetRobot();$('#p-run').disabled=false;pMsg('Robô de volta ao início.');drawProg();});
+function expand(prog){
+  let i=0;
+  function parse(){
+    const seq=[];
+    while(i<prog.length){
+      const b=prog[i];
+      if(b.t==='END')return seq;
+      i++;
+      if(b.t==='REP'){
+        const inner=parse();
+        if(i>=prog.length)throw new Error('Todo bloco Repetir precisa de um Fim do repetir.');
+        i++;
+        for(let k=0;k<b.n;k++)seq.push(...inner);
+      }else seq.push(b.t);
+    }
+    return seq;
+  }
+  const seq=parse();
+  if(i<prog.length)throw new Error('Há um Fim do repetir sem um Repetir antes dele.');
+  return seq;
+}
+function tween(from,to,ms,tok){
+  return new Promise(res=>{
+    const t0=performance.now();
+    function f(now){
+      if(tok!==P.tok){res();return;}
+      const k=Math.min(1,(now-t0)/ms);
+      const e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+      P.r.x=from.x+(to.x-from.x)*e;P.r.y=from.y+(to.y-from.y)*e;P.r.a=from.a+(to.a-from.a)*e;
+      drawProg();
+      if(k<1)requestAnimationFrame(f);else res();
+    }
+    requestAnimationFrame(f);
+  });
+}
+async function pRun(){
+  if(P.running)return;
+  let seq;
+  try{seq=expand(P.prog);}catch(e){pMsg(e.message,'bad');return;}
+  if(!seq.length){pMsg('Adicione blocos ao programa antes de executar.','bad');return;}
+  P.tok++;const tok=P.tok;P.running=true;$('#p-run').disabled=true;
+  pResetRobot();drawProg();await sleep(250);
+  const lv=LEVELS[P.lv];
+  for(let k=0;k<seq.length;k++){
+    if(tok!==P.tok)return;
+    const c=seq[k],r={...P.r};
+    if(c==='L'||c==='R'){
+      await tween(r,{x:r.x,y:r.y,a:r.a+(c==='R'?90:-90)},320,tok);
+    }else{
+      const [dx,dy]=DIRS[dirOf(r.a)];
+      const nx=Math.round(r.x)+dx,ny=Math.round(r.y)+dy;
+      if(pWall(nx,ny)){
+        await tween(r,{x:r.x+dx*.25,y:r.y+dy*.25,a:r.a},120,tok);
+        await tween(P.r,{x:r.x,y:r.y,a:r.a},160,tok);
+        if(tok!==P.tok)return;
+        pMsg('O robô bateu em um obstáculo na ação '+(k+1)+' de '+seq.length+'. Revise o programa e tente de novo.','bad');
+        P.running=false;$('#p-run').disabled=false;return;
+      }
+      await tween(r,{x:nx,y:ny,a:r.a},380,tok);
+    }
+    if(tok!==P.tok)return;
+    await sleep(60);
+  }
+  P.running=false;$('#p-run').disabled=false;
+  const rx=Math.round(P.r.x),ry=Math.round(P.r.y);
+  if(rx===lv.goal.x&&ry===lv.goal.y)pMsg('Chegou à bandeira com '+P.prog.length+' blocos. '+(P.lv<LEVELS.length-1?'Experimente o próximo nível.':'Você concluiu todos os níveis.'),'ok');
+  else pMsg('O programa terminou fora da bandeira. Veja onde o robô parou e ajuste os blocos.','bad');
+}
+$('#p-run').addEventListener('click',pRun);
+function layoutProg(){const lv=LEVELS[P.lv];P.lay=fit($('#cv-prog'),lv.w,lv.h);drawProg();}
+function drawProg(){
+  if(!P.lay||$('#m-prog').hidden||$('#p-simulador').hidden)return;
+  const {ctx,cs}=P.lay,lv=LEVELS[P.lv],ws=wallSet(lv);
+  ctx.clearRect(0,0,P.lay.w,P.lay.h);
+  drawGrid(ctx,cs,lv.w,lv.h,(x,y)=>ws.has(x+','+y));
+  drawFlag(ctx,cs,lv.goal.x,lv.goal.y);
+  const rx=Math.round(P.r.x),ry=Math.round(P.r.y),d=dirOf(P.r.a);
+  const n=freeAhead(rx,ry,d,pWall);
+  drawBeam(ctx,cs,rx,ry,d,n);
+  drawRobot(ctx,cs,P.r.x,P.r.y,P.r.a);
+  const t=(n*20+10)+' cm';
+  if($('#ro-dist').textContent!==t)$('#ro-dist').textContent=t;
+}
+
+/* ---------- modo autônomo ---------- */
+const AW=10,AH=8,STEPS=200;
+const A={walls:new Set(),r:{x:0,y:0,d:1},vis:new Map(),steps:0,turns:0,reach:1,running:false,tok:0,res:{},lay:null,reading:null};
+const aWall=(x,y)=>x<0||y<0||x>=AW||y>=AH||A.walls.has(x+','+y);
+function aNewRoom(){
+  A.tok++;A.running=false;
+  do{
+    A.walls=new Set();
+    for(let y=0;y<AH;y++)for(let x=0;x<AW;x++)if(Math.random()<.2)A.walls.add(x+','+y);
+    let sx,sy;do{sx=Math.floor(Math.random()*AW);sy=Math.floor(Math.random()*AH);}while(A.walls.has(sx+','+sy));
+    A.r={x:sx,y:sy,d:Math.floor(Math.random()*4)};
+    // área alcançável
+    const seen=new Set([sx+','+sy]),q=[[sx,sy]];
+    while(q.length){const [x,y]=q.shift();DIRS.forEach(([dx,dy])=>{const nx=x+dx,ny=y+dy,k=nx+','+ny;if(!aWall(nx,ny)&&!seen.has(k)){seen.add(k);q.push([nx,ny]);}});}
+    A.reach=seen.size;
+  }while(A.reach<AW*AH*.55);
+  A.res={};A.start={...A.r};aReset();
+}
+function aReset(){
+  A.tok++;A.running=false;
+  A.r={...A.start};A.vis=new Map([[A.r.y*AW+A.r.x,1]]);A.steps=0;A.turns=0;
+  $('#a-run').textContent='Executar';aStats();aResults();aDraw();
+}
+function aDist(){return freeAhead(A.r.x,A.r.y,A.r.d,aWall)*20+10;}
+function aTick(){
+  const s=$('#a-strat').value,d=aDist();A.reading=d;
+  const turn=()=>{A.turns++;A.r.d=(A.r.d+(s==='dir'?1:s==='esq'?3:(Math.random()<.5?1:3)))%4;};
+  if(d<20)turn();
+  else if(s==='rnd'&&Math.random()<.2)turn();
+  else{const [dx,dy]=DIRS[A.r.d];A.r.x+=dx;A.r.y+=dy;const k=A.r.y*AW+A.r.x;A.vis.set(k,(A.vis.get(k)||0)+1);}
+  A.steps++;
+}
+function aCov(){return Math.round(100*A.vis.size/A.reach);}
+function aStats(){
+  $('#a-steps').textContent=A.steps;$('#a-cov').textContent=aCov()+'%';$('#a-turns').textContent=A.turns;
+  $('#a-dist').textContent=A.steps?(aDist()+' cm'):'—';
+}
+function aResults(){
+  const n={dir:'Direita',esq:'Esquerda',rnd:'Sorteio'};
+  $('#a-results').innerHTML=Object.keys(n).map(k=>`<span class="pill">${n[k]}: <b>${A.res[k]!==undefined?A.res[k]+'%':'—'}</b></span>`).join('');
+}
+function aCode(){
+  const s=$('#a-strat').value;
+  const lado=s==='dir'?'à direita':s==='esq'?'à esquerda':'para um lado sorteado';
+  let t='SE distância_frente < 20 cm\n   ENTÃO girar '+lado+'\n';
+  if(s==='rnd')t+='SENÃO, 1 vez em 5\n   girar para um lado sorteado\n';
+  t+='SENÃO avançar';
+  $('#a-code').textContent=t;
+}
+async function aRun(){
+  if(A.running){A.tok++;A.running=false;$('#a-run').textContent='Continuar';return;}
+  if(A.steps>=STEPS)aReset();
+  A.tok++;const tok=A.tok;A.running=true;$('#a-run').textContent='Pausar';
+  while(A.steps<STEPS){
+    if(tok!==A.tok)return;
+    aTick();aStats();aDraw();
+    await sleep([0,420,200,80,30,8][+$('#a-speed').value]);
+  }
+  A.running=false;$('#a-run').textContent='Executar de novo';
+  A.res[$('#a-strat').value]=aCov();aResults();
+}
+$('#a-run').addEventListener('click',aRun);
+$('#a-new').addEventListener('click',()=>{aNewRoom();aCode();});
+$('#a-strat').addEventListener('change',()=>{aCode();aReset();});
+function layoutAuto(){A.lay=fit($('#cv-auto'),AW,AH);aDraw();}
+function aDraw(){
+  if(!A.lay||$('#m-auto').hidden||$('#p-simulador').hidden)return;
+  const {ctx,cs}=A.lay;
+  ctx.clearRect(0,0,A.lay.w,A.lay.h);
+  drawGrid(ctx,cs,AW,AH,(x,y)=>A.walls.has(x+','+y));
+  ctx.fillStyle=css('--accent');
+  A.vis.forEach((v,k)=>{
+    const x=k%AW,y=Math.floor(k/AW);
+    ctx.globalAlpha=Math.min(.55,.16+v*.07);
+    ctx.fillRect(x*cs+1,y*cs+1,cs-2,cs-2);
+  });
+  ctx.globalAlpha=1;
+  drawBeam(ctx,cs,A.r.x,A.r.y,A.r.d,freeAhead(A.r.x,A.r.y,A.r.d,aWall));
+  drawRobot(ctx,cs,A.r.x,A.r.y,A.r.d*90);
+}
+
+/* modos */
+function setMode(m){
+  const prog=m==='prog';
+  $('#m-prog').hidden=!prog;$('#m-auto').hidden=prog;
+  $('#mode-prog').setAttribute('aria-pressed',prog);$('#mode-auto').setAttribute('aria-pressed',!prog);
+  layoutSim();
+}
+document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+function layoutSim(){
+  if($('#p-simulador').hidden)return;
+  if(!$('#m-prog').hidden)layoutProg();
+  if(!$('#m-auto').hidden)layoutAuto();
+}
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(layoutSim,120);});
+function repaint(){drawProg();aDraw();}
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',repaint);}catch(e){}
+new MutationObserver(repaint).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+/* ---------- início ---------- */
+aNewRoom();aCode();
+pLoad(0);
+})();
+</script>
+</body>
+</html>
